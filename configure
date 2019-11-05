@@ -1,0 +1,12 @@
+#!/bin/bash
+
+checkfile() {
+	echo -n "Checking $@..."
+	[[ -f $@ ]] && echo "ok" || (echo "error" ; exit)
+}
+
+checkbin() {
+	echo -n "Checking $@..."
+	which $@ > /dev/null
+	[[ $? -eq 0 ]] && echo "ok" || ( echo "error" ; exit)
+}

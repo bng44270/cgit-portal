@@ -1,5 +1,72 @@
 #!/bin/bash
 
+newsetting() {
+  read -p "$1 [$3]: " thisset
+  if [ -z "$thisset" ]; then
+    echo "$2 $3" >> $4
+  else
+    echo "$2 $thisset" | sed 's/\/$//g' >> $4
+  fi
+}
+
+getsetting() {
+	grep "^$2[ \t]*" $1 | sed 's/^'"$2"'[ \t]*//g'
+}
+
+checkdistro() {
+	echo -n "Checking distro..."
+	isdebian="$(cat /etc/*release* | grep -i 'debian')"
+	iscentos="$(cat /etc/*release* | grep -i 'centos')"
+	if [ ${#isdebian} -gt 0 ]; then
+		echo "debian"
+		echo "DISTRO debian" >> $1
+	fi
+	if [ ${#centos} -gt 0 ]; then
+		echo "centos"
+		echo "DISTRO centos" >> $1
+	fi
+	if [ ${#isdebian} -eq 0 ] && [ ${#iscentos} -eq 0 ]; then
+		echo "Requires CentOS or Debian"
+		exit
+	fi
+}
+
+checkapache() {
+	echo -n "Checking Apache..."
+	if [ "$(getsetting $1 DISTRO)" == "centos" ]; then
+		which /usr/sbin/httpd > /dev/null
+		[[ $? -eq 0 ]] && echo "ok" || (echo "error" ; exit)
+	fi
+	if [ "$(getsetting $1 DISTRO)" == "debian" ]; then
+		which /usr/sbin/apache2 > /dev/null
+		[[ $? -eq 0 ]] && echo "ok" || (echo "error"; exit)
+	fi
+}
+
+checkcgit() {
+	echo -n "Checking cgit..."
+	if [ "$(getsetting $1 DISTRO)" == "centos" ]; then
+		if [ -f /etc/httpd/conf.d/cgit.conf ]; then
+			echo "ok"
+			echo "CGITCONF /etc/httpd/conf.d/cgit.conf" >> $1
+			echo "CGITCSS /cgit-data" >> $1
+		else
+			echo "error"
+			exit
+		fi
+	fi
+	if [ "$(getsetting $1 DISTRO)" == "debian" ]; then
+		if [ -f /etc/apache2/conf-enabled/cgit.conf ]; then
+			echo "ok"
+			echo "CGITCONF /etc/apache2/conf-enabled/cgit.conf" >> $1
+			echo "CGITCSS /cgit-css" >> $1
+		else
+			echo "error"
+			exit
+		fi
+	fi
+}
+
 checkfile() {
 	echo -n "Checking $@..."
 	[[ -f $@ ]] && echo "ok" || (echo "error" ; exit)
@@ -10,3 +77,20 @@ checkbin() {
 	which $@ > /dev/null
 	[[ $? -eq 0 ]] && echo "ok" || ( echo "error" ; exit)
 }
+
+mkdir -p tmp
+
+# Perform Checks
+checkbin pandoc
+checkfile /etc/cgitrc
+
+checkdistro tmp/settings.txt
+checkapache tmp/settings.txt
+checkcgit tmp/settings.txt
+
+# Save Settings
+newsetting "Enter the path for git repositories" "GITPATH" "/opt/repos" tmp/settings.txt
+newsetting "Enter cgit URL" "CGITURL" "http://localhost/git/" tmp/settings.txt
+newsetting "Enter web root" "HTTPROOT" "/srv/www" tmp/settings.txt
+
+cp Makefile.pre Makefile

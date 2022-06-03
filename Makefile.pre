@@ -1,0 +1,39 @@
+define getsetting
+$$(grep "^$(2)[ \t]*" $(1) | sed 's/^$(2)[ \t]*//g')
+endef
+
+all: build/cgitrc build/cgit.conf build/cgit.php build/filters
+	cp filters/* build/filters
+
+install:
+	mv $(call getsetting,tmp/settings.txt,CGITCONF) $(call getsetting,tmp/settings.txt,CGITCONF).old
+	cp build/cgit.conf $(call getsetting,tmp/settings.txt,CGITCONF)
+	[[ -f /etc/cgitrc ]] && mv /etc/cgitrc /etc/cgitrc.old
+	cp build/cgitrc/ /etc
+	mkdir -p /usr/local/bin
+	cp build/filters/* /usr/local/bin
+	@echo ""
+	@echo "######################################################"
+	@echo "# Add the following line to Apache VirtualHost"
+	@echo "#          Use CgitPage /$$(basename "$(call getsetting,tmp/settings.txt,CGITURL)")"
+	@echo "######################################################"
+
+build/cgitrc: build
+	m4 -DCGITCSS="$(call getsetting,tmp/settings.txt,CGITCSS)" -DGITPATH="$(call getsetting,tmp/settings.txt,GITPATH)" cgitrc.m4 > build/cgitrc
+
+build/cgit.conf: build
+	echo "<Macro CgitPage \$$url>" > build/cgit.conf
+	sed 's/^ScriptAlias \([\/]*\)[a-z]\+\([\/]*\) \(.*\)$$/ScriptAlias \1$$url\2 \3/g;s/^RedirectMatch.*$$/RedirectMatch ^$$url$$ $$url\//g' $(call getsetting,tmp/settings.txt,CGITCONF) >> build/cgit.conf
+	echo "</Macro>" >> build/cgit.conf
+
+build/cgit.php: build
+	m4 -DCGITURL="$(call getsetting,tmp/settings.txt,CGITURL)" cgit.php.m4 > build/cgit.php
+
+build/filters: build
+	mkdir -p build/filters
+
+build:
+	mkdir -p build
+
+clean:
+	rm -rf build
